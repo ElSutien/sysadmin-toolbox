@@ -1,0 +1,182 @@
+#!/bin/bash
+
+NAME="checknet"
+AUTHOR="ElSutien"
+VERSION=1.0
+RELEASE_DATE="18/12/2025"
+
+#( trap 'exit' SIGINT; for x in {1..254}; do ipt="${1}.${x}"; ping -c 2 -W 0.5 -q ${ipt} 1>/dev/null 2>&1 && echo "Host found at ${ipt}" || echo "Nothing at ${ipt}"; done )
+
+SPINNER_PID=""
+
+# FUNCTION spinner logic
+spinner() {
+  local frames=(
+    "Working ..."
+    "Working o.."
+    "Working Oo."
+    "Working oOo"
+    "Working .oO"
+    "Working ..o"
+  )
+  local i=0
+
+  while true; do
+    printf "\r%s" "${frames[i]}"
+    i=$(( (i + 1) % ${#frames[@]} ))
+    sleep 0.5
+  done
+}
+
+# FUNCTION start working spinner
+start_spinner() {
+  spinner &
+  SPINNER_PID=$!
+}
+
+# FUNCTION stop working spinner
+stop_spinner() {
+  if [[ -n "$SPINNER_PID" ]]; then
+    kill "$SPINNER_PID" 2>/dev/null
+    wait "$SPINNER_PID" 2>/dev/null || true
+    SPINNER_PID=""
+    # Borra la línea del spinner
+    printf "\r\033[K"
+  fi
+}
+
+# Ctrl+C trap to stop spinner if running and exit
+trap 'stop_spinner; exit' SIGINT
+
+
+# FUNCTION print help message
+print_help () {
+  echo "${NAME} v${VERSION} - By ${AUTHOR}"
+  echo "Check for responding IPs on a net"
+  echo
+  echo "Usage: checknet <net>[/cidr]"
+  echo "Examples:"
+  echo "  checknet 10.254.250.0     #Uses default 24 mask"
+  echo "  checknet 10.254.250.0/25"
+}
+
+
+# If no parameter given
+[ $# -eq 0 ] && show_help && exit 1
+
+case $1 in
+  -h|--help)
+    print_help
+    exit 0
+    ;;
+esac
+
+INPUT="$1"
+
+# By default CIDR = 24
+if [[ "$INPUT" == *"/"* ]]; then
+  NETWORK="${INPUT%/*}"
+  CIDR="${INPUT#*/}"
+else
+  NETWORK="$INPUT"
+  CIDR=24
+fi
+
+# CIDR validation
+if ! [[ "$CIDR" =~ ^[0-9]+$ ]]; then
+  echo "CIDR not valid: $CIDR"
+  exit 1
+fi
+
+if (( CIDR < 0 || CIDR > 31 )); then
+  echo "CIDR out of range (0-31): $CIDR"
+  exit 1
+fi
+
+
+# IP address validation
+if ! [[ "$NETWORK" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+  echo "IP not valid: $NETWORK"
+  exit 1
+fi
+
+
+# Convert decimal-dots notation IP to integer
+IFS=. read -r o1 o2 o3 o4 <<< "$NETWORK"
+for octet in "$o1" "$o2" "$o3" "$o4"; do
+  if (( octet < 0 || octet > 255 )); then
+    echo "Network IP not valid (out-of-range octet): $NETWORK"
+    exit 1
+  fi
+done
+
+
+# --- CÁLCULO DE HOSTS ----------------------------------------------------
+
+ip=$(( (o1 << 24) + (o2 << 16) + (o3 << 8) + o4 ))
+host_bits=$(( 32 - CIDR ))
+
+# If no host bits, no hosts range available
+if (( host_bits <= 0 )); then
+  echo "Network $NETWORK/$CIDR do not have any usable hosts."
+  exit 0
+fi
+
+total_ips=$(( 1 << host_bits ))
+
+first_ip=$(( ip + 1 ))             # First host IP
+last_ip=$(( ip + total_ips - 2 ))  # Last host IP
+
+ipl=()
+
+for (( i = first_ip; i <= last_ip; i++ )); do
+  o1=$(( (i >> 24) & 255 ))
+  o2=$(( (i >> 16) & 255 ))
+  o3=$(( (i >> 8)  & 255 ))
+  o4=$(( i        & 255 ))
+  ipl+=("$o1.$o2.$o3.$o4")
+done
+
+
+
+# --- CONCURRENT PINGS + SPINNER ----------------------------------------
+
+MAXJOBS=50
+fipl=()
+
+
+# Start spinner before launch pings
+start_spinner
+
+
+while IFS= read -r ip_found; do
+  fipl+=("$ip_found")
+done < <(
+  printf '%s\n' "${ipl[@]}" |
+  xargs -P "$MAXJOBS" -I{} bash -c '
+    ip="$1"
+    if ping -c 2 -W 0.5 -q "$ip" >/dev/null 2>&1; then
+      echo "$ip"
+    fi
+  ' _ {} | sort -V
+)
+
+
+# Stop and erase spinner
+stop_spinner
+
+
+# --- RESULTS ----------------------------------------------------------
+
+# Orderes output
+if [ ${#fipl[@]} -gt 0 ]; then
+  echo "IPs FOUND:"
+  for x in "${fipl[@]}"; do
+    echo "$x"
+  done
+else
+  echo "None IP found on this net."
+fi
+
+
+exit 0
