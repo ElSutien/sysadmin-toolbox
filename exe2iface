@@ -1,0 +1,142 @@
+#!/bin/bash
+
+NAME="exe2iface"
+VERSION="0.2"
+RELEASE_DATE="14/11/2025"
+
+error () {
+  echo -n "ERROR: "
+  echo "$1" 1>&2
+  shift
+  eval $*
+  return $?
+}
+
+info () {
+  echo -n "INFO: "
+  echo "$1"
+}
+
+
+#Check if Dev exist and have default route
+# $1 : Dev name
+checkDev () {
+  ip route show dev ${1} 2>&1 1>/dev/null || return 1
+  ip route show dev ${1} 2>&1 | grep -q default || return 2
+  return 0
+}
+
+
+# $1 : Dev name
+# $2 : var name to store Default Via IP
+getDefaultViaDev () {
+  local via=$(ip r show dev ${1} 2>&1 | grep default | awk '{print $3}')
+  eval $2="\"$via\""
+}
+
+
+# $1 : destination IP
+# $2 : Via IP
+# $3 : Dev name
+checkRule () {
+  ip route show dev ${3} 2>&1 | grep -q "${1} via ${2} dev ${3}" && return 0 || return 1
+}
+
+
+# $1 : host
+# echoes IP
+resolveHost () {
+  local addr
+  if echo "$1" | grep -q "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
+    echo "$1"
+  else
+    addr=$(host -t A ${1} | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") || return 1
+    echo $addr
+  fi
+}
+
+
+case $1 in
+  --help|-h)
+    echo "$NAME. Version $VERSION - By ElSutien"
+    echo "Release date: $RELEASE_DATE"
+    echo ""
+    echo "Utility to run a command and childs under a specific network interface."
+    echo ""
+    echo "HELP: $NAME [options] <Iface> [command [[attrs] ...]]"
+    echo ""
+    echo "      Options:"
+    echo "        -h --help     Show this help"
+    echo "        -V --version  Show version information"
+    echo ""
+    echo "      Default command: alacritty"
+    exit 0
+    ;;
+    
+  --version|-V)
+    echo "$NAME $VERSION - By ElSutien"
+    exit 0
+    ;;
+esac
+
+
+#Force to run under root
+if [ $EUID -ne 0 ]; then
+  echo "Requires root"
+  
+  satrs=""
+  while [ $# -gt 0 ]; do
+    if [ $(echo "$1" | wc -w) -gt 1 ]; then
+      satrs="${satrs:+"$satrs "}\"$1\""
+    else
+      satrs="${satrs:+"$satrs "}$1"
+    fi
+    shift
+  done
+  sudo ${0} ${satrs}
+  exit $?
+fi
+
+
+#Get parameters
+# $2: iface to bind
+# $3: command (opt) default alacritty
+# $4: command attributes
+[ -n "$1" ] && IFACE="$1" || error "Parameter Iface not given" exit 1
+shift
+[ -n "$1" ] && CMD="$1" || CMD="alacritty"
+shift
+#[ -n "$1" ] && ATR="$*" || ATR="$IP"
+
+ATR=()
+for x in $*; do
+  ATR+=("$x")
+done
+
+
+#Checking if iface exists
+#checkDev $IFACE || error "Iface '$IFACE' do not exist" exit 2
+
+#Set variables
+NETNS="ns_${IFACE}_${$}"
+
+
+info "Creating namespace..."
+[ $(ip netns | grep "$NETNS" | wc -l) -eq 1 ] && error "Creating net namespace. Already exist" exit 3
+ip netns add ${NETNS} || error "Creating net namespace. Kernel error" exit 3
+
+info "Linking net device..."
+ip link set ${IFACE} netns ${NETNS} || error "Linking net iface. Can not link to NS" exit 4
+ip -n ${NETNS} link set ${IFACE} up || error "Linking net iface. Can not bring iface up" exit 4
+
+info "Getting DHCP..."
+ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
+
+info "Executing command: ${CMD} ${ATR}"
+eval ip netns exec ${NETNS} ${CMD} ${ATR[@]} || error "Executing command" exit 6
+
+info "Disabling namespace..."
+ip -n ${NETNS} link set netns 1 dev ${IFACE} && ip link set ${IFACE} up || error "Recovering iface to root namespace"
+ip netns delete ${NETNS} || error "Deleting namespace"
+
+

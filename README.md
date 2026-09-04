@@ -13,6 +13,8 @@ These tools are created under no warranty nor responsability. Use them by your o
 
 - **checknet** -- inspec a given network in CIDR notation to check (using ping) which IPs are on use.
 
+- **exe2iface** -- isolate an interface in a new netspace and run an application on it.
+
 ### Terminal utilities and functions
 - **clize** -- Tool to colorize the output of a given command using regex rules.
 
