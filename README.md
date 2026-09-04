@@ -16,6 +16,8 @@ These tools are created under no warranty nor responsability. Use them by your o
 ### Terminal utilities and functions
 - **clize** -- Tool to colorize the output of a given command using regex rules.
 
+- **watch2** -- Improved version of watch utilitie that handles interactive binaries and colorized output
+
 #### Functions tlabel.sh
 This script, meant to be sourced, load following functions onto your terminal sessions.
 
