@@ -14,7 +14,7 @@ These tools are created under no warranty nor responsability. Use them by your o
 - **checknet** -- inspec a given network in CIDR notation to check (using ping) which IPs are on use.
 
 ### Terminal utilities and functions
-
+- **clize** -- Tool to colorize the output of a given command using regex rules.
 
 #### Functions tlabel.sh
 This script, meant to be sourced, load following functions onto your terminal sessions.
