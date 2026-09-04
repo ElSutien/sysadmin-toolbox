@@ -13,4 +13,14 @@ These tools are created under no warranty nor responsability. Use them by your o
 
 - **checknet** -- inspec a given network in CIDR notation to check (using ping) which IPs are on use.
 
+### Terminal utilities and functions
 
+
+#### Functions tlabel.sh
+This script, meant to be sourced, load following functions onto your terminal sessions.
+
+- **tlabel** -- Creates a label on the upper right corner of the terminal with the dessired text to help identify it pourpose. Also changes the terminal title with the same text.
+
+- **thead** -- Creates a header on the terminal (first line) with a given text for terminal identification. Also changes the terminal window title.
+
+- **ttitle** -- Changes the terminal window title with the given text.
