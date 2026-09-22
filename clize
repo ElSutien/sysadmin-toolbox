@@ -1,8 +1,8 @@
 #!/bin/bash
 
 
-VERSION="1.0"
-RELEASE_DATE="16/09/2026"
+VERSION="1.1"
+RELEASE_DATE="22/09/2026"
 AUTHOR="ElSutien"
 
 
@@ -58,55 +58,52 @@ printVersion () {
 }
 
 
-clizeF () {
-  local -a rules=()
-  local -a cmd=()
-  local found_separator=0
 
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      --help)
-        printHelp
-        return 0
-        ;;
-        
-      --version)
-        printVersion
-        return 0
-        ;;
+declare -a rules=()
+declare -a cmd=()
+declare found_separator=0
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --help)
+      printHelp
+      exit 0
+      ;;
       
-      --)
-        found_separator=1
-        shift
-        cmd=("$@")
-        break
-        ;;
+    --version)
+      printVersion
+      exit 0
+      ;;
+    
+    --)
+      found_separator=1
+      shift
+      cmd=("$@")
+      break
+      ;;
 
-      *)
-        if [ "$#" -lt 3 ]; then
-          printf 'Usage: clize COLOR REGEX [COLOR REGEX ...] -- COMMAND [ARGS...]\n' >&2
-          return 1
-        fi
+    *)
+      if [ "$#" -lt 3 ]; then
+        printf 'Usage: clize COLOR REGEX [COLOR REGEX ...] -- COMMAND [ARGS...]\n' >&2
+        exit 1
+      fi
 
-        rules+=("$1" "$2")
-        shift 2
-        ;;
-    esac
-  done
+      rules+=("$1" "$2")
+      shift 2
+      ;;
+  esac
+done
 
-  if [ "$found_separator" -ne 1 ]; then
-    printf 'clize: falta separador --\n' >&2
-    printf 'Uso: clize COLOR REGEX [COLOR REGEX ...] -- COMANDO [ARGS...]\n' >&2
-    return 1
-  fi
+if [ "$found_separator" -ne 1 ]; then
+  printf 'clize: falta separador --\n' >&2
+  printf 'Uso: clize COLOR REGEX [COLOR REGEX ...] -- COMANDO [ARGS...]\n' >&2
+  exit 1
+fi
 
-  if [ "${#cmd[@]}" -eq 0 ]; then
-    printf 'clize: falta comando despues de --\n' >&2
-    return 1
-  fi
+if [ "${#cmd[@]}" -eq 0 ]; then
+  printf 'clize: falta comando despues de --\n' >&2
+  exit 1
+fi
 
-  script -qefc "$(printf '%q ' "${cmd[@]}")" /dev/null | __clizepipe "${rules[@]}"
-}
+script -qefc "$(printf '%q ' "${cmd[@]}")" /dev/null | __clizepipe "${rules[@]}"
 
-
-clizeF $*
