@@ -2,8 +2,8 @@
 
 NAME="checknet"
 AUTHOR="ElSutien"
-VERSION=1.0
-RELEASE_DATE="18/12/2025"
+VERSION=1.1
+RELEASE_DATE="22/09/2026"
 
 #( trap 'exit' SIGINT; for x in {1..254}; do ipt="${1}.${x}"; ping -c 2 -W 0.5 -q ${ipt} 1>/dev/null 2>&1 && echo "Host found at ${ipt}" || echo "Nothing at ${ipt}"; done )
 
@@ -52,12 +52,22 @@ trap 'stop_spinner; exit' SIGINT
 # FUNCTION print help message
 print_help () {
   echo "${NAME} v${VERSION} - By ${AUTHOR}"
-  echo "Check for responding IPs on a net"
+  echo "Check for responding IPs on a net using ICMP"
   echo
-  echo "Usage: checknet <net>[/cidr]"
+  echo "Usage: checknet [options] <net>[/cidr]"
+  echo
+  echo "Options:"
+  echo "  -h  --help      Show this help message"
+  echo "      --version   Show version information"
   echo "Examples:"
-  echo "  checknet 10.254.250.0     #Uses default 24 mask"
-  echo "  checknet 10.254.250.0/25"
+  echo "  checknet 10.10.10.0     #Uses default 24 mask"
+  echo "  checknet 10.10.20.0/25"
+}
+
+# FUNCTION print version message
+print_version () {
+  echo "${NAME} v${VERSION} (${RELEASE_DATE})"
+  echo "By ${AUTHOR}"
 }
 
 
@@ -67,6 +77,10 @@ print_help () {
 case $1 in
   -h|--help)
     print_help
+    exit 0
+    ;;
+  --version)
+    print_version
     exit 0
     ;;
 esac
@@ -111,7 +125,7 @@ for octet in "$o1" "$o2" "$o3" "$o4"; do
 done
 
 
-# --- CÁLCULO DE HOSTS ----------------------------------------------------
+# --- HOSTS COMPUTING ----------------------------------------------------
 
 ip=$(( (o1 << 24) + (o2 << 16) + (o3 << 8) + o4 ))
 host_bits=$(( 32 - CIDR ))
@@ -168,7 +182,7 @@ stop_spinner
 
 # --- RESULTS ----------------------------------------------------------
 
-# Orderes output
+# Order output
 if [ ${#fipl[@]} -gt 0 ]; then
   echo "IPs FOUND:"
   for x in "${fipl[@]}"; do
