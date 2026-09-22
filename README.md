@@ -15,6 +15,8 @@ These tools are created under no warranty nor responsability. Use them by your o
 
 - **exe2iface** -- isolate an interface in a new netspace and run an application on it.
 
+- **tcpdump2** -- TCPDump handler with colored output for easy reading.
+
 ### Terminal utilities and functions
 - **clize** -- Tool to colorize the output of a given command using regex rules.
 
