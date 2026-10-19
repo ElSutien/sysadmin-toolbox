@@ -1,5 +1,9 @@
 #!/bin/bash
 
+VERSION="0.2"
+RELEASE_DATE="19/10/2026"
+AUTHOR="ElSutien"
+
 # $1 : var name of text
 # $2 : line number from 1
 getline () {
@@ -31,18 +35,39 @@ printheader () {
 }
 
 
+printHelp () {
+  echo "Monitorize a command with colors and interactive terminal."
+  echo "Can handle bash funtions and any declared elements on session."
+  echo
+  echo "Usage:"
+  echo "  watch2 [options] [--] command"
+  echo
+  echo "Options:"
+  echo "  -n <secs>       Seconds to wait between updates."
+  echo "  -h, --help      Display this help message and exit."
+  echo "  -V, --version   Display version information and exit."
+}
+
+printVersion () {
+  echo "watch2 v$VERSION ($RELEASE_DATE) By $AUTHOR"
+}
+
+#Parameters
 p_interval=2
-mode=0
+mode=0  #Automaton 0:parameters 1:command
 declare -a cmd
 
 while [ $# -gt 0 ]; do
 
   if [ $mode -eq 0 ]; then
     case $1 in
-      --help)
-      echo "Usage: watch2 [-n <interval>] [--] <command> <arg>"
-      echo
-      echo "Monitorize a command with colors and interactive terminal"
+      -h|--help)
+      printHelp
+      exit 0
+      ;;
+      
+      -V|--version)
+      printVersion
       exit 0
       ;;
       
