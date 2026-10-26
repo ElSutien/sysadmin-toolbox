@@ -30,3 +30,8 @@ This script, meant to be sourced, load following functions onto your terminal se
 - **thead** -- Creates a header on the terminal (first line) with a given text for terminal identification. Also changes the terminal window title.
 
 - **ttitle** -- Changes the terminal window title with the given text.
+
+#### Functions nohistory.sh
+This script, menat to be sourced, load following function onto your terminal sessions.
+
+- **nohistory** -- Invokes a subshell session with no history persistence. Usefull for testing functions and huge commands without messing up user history.
