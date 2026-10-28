@@ -136,32 +136,6 @@ resolveHost () {
 }
 
 
-case $1 in
-  --help|-h)
-    echo "$NAME. Version $VERSION - By ElSutien"
-    echo "Release date: $RELEASE_DATE"
-    echo ""
-    echo "Utility to run a command and childs under a specific network interface."
-    echo ""
-    echo "HELP: $NAME [options] <Iface> [command [attrs ...]]"
-    echo ""
-    echo "      Options:"
-    echo "        -h --help     Show this help"
-    echo "        -V --version  Show version information"
-    echo ""
-    echo "      Default command: bash"
-    exit 0
-    ;;
-    
-  --version|-V)
-    echo "$NAME $VERSION - By $AUTHOR"
-    exit 0
-    ;;
-esac
-
-
-#Evaluate prerequisites
-
 
 
 #Force to run under root
@@ -185,12 +159,69 @@ if [ $EUID -ne 0 ]; then
 fi
 
 
+
+p_iface=
+p_cmd=()
+p_iswlan=0
+
+while [ $# -gt 0 ]; do
+	case $1 in
+		--help|-h)
+		  echo "$NAME. Version $VERSION - By ElSutien"
+		  echo "Release date: $RELEASE_DATE"
+		  echo ""
+		  echo "Utility to run a command and childs under a specific network interface."
+		  echo ""
+		  echo "HELP: $NAME [options] <Iface> [command [attrs ...]]"
+		  echo ""
+		  echo "      Options:"
+		  #echo "        -w --wlan     Interface is a Phy-Wlan iface"
+		  echo "        -h --help     Show this help"
+		  echo "        -V --version  Show version information"
+		  echo ""
+		  echo "      Default command: bash"
+		  exit 0
+		  ;;
+		  
+		--version|-V)
+		  echo "$NAME $VERSION - By $AUTHOR"
+		  exit 0
+		  ;;
+		  
+		-w|--wlan)
+			p_iswlan=1
+			;;
+		  
+		-*)
+		  error "Option $1 do not exist."
+		  exit 1
+		  ;;
+		  
+		*)
+		  if [ -z "$p_iface" ]; then
+		    p_iface="$1"
+		  else
+		    p_cmd+=("$1")
+		  fi
+		  ;;
+	esac
+	shift
+done
+
+
+#Evaluate prerequisites
+[ -n "$p_iface" ] && IFACE="$p_iface" || error "Parameter Iface not given" exit 1
+
+#Set the default command to bash
+[ -z "${p_cmd[@]}" ] && p_cmd+=("bash")
+
+
+
 #Get parameters
 # $2: iface to bind
 # $3: command (opt) default alacritty
 # $4: command attributes
-[ -n "$1" ] && IFACE="$1" || error "Parameter Iface not given" exit 1
-shift
+
 [ -n "$1" ] && CMD="$1" || CMD="bash"
 shift
 #[ -n "$1" ] && ATR="$*" || ATR="$IP"
@@ -244,8 +275,8 @@ if askYesNo "Do you want to enable DHCP?" "" y; then
   ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
 fi
 
-info "Executing command: ${CMD} ${ATR[@]}"
-eval ip netns exec ${NETNS} ${CMD} ${ATR[@]} || error "Executing command"
+info "Executing command: ${p_cmd[@]}"
+eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
 
 #Restoring interface
 info "Disabling namespace..."
