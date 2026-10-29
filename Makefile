@@ -13,9 +13,11 @@ PWD = $(shell pwd)
 
 
 
-.PHONY:  info help uninstall
+.PHONY:  all info help uninstall
 default: install
 
+
+all: install install-functions
 
 
 install: $(TARGETS)
