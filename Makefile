@@ -24,8 +24,8 @@ install: $(TARGETS)
 
 
 $(BINPATH)/% :  %.sh
-	cp $(<) $(@)
-	chmod +x $(@)
+	sudo cp $(<) $(@)
+	sudo chmod +x $(@)
 
 
 
