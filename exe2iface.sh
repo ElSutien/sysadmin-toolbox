@@ -298,3 +298,13 @@ else
 fi
 
 ip netns delete ${NETNS} || error "Deleting namespace"
+
+
+if [ $p_iswlan -eq 1 ]; then #Check recovery for wlan ifaces
+  sleep 1
+  if ! checkDev ${IFACE}; then
+    error "Iface ${IFACE} not well recovered"
+    info "Recreating iface..."
+    iw phy ${PHY} interface add ${IFACE} type managed && info "Iface ${IFACE} recovered!" || error "Iface ${IFACE} could not be created from ${PHY}"
+  fi
+fi
