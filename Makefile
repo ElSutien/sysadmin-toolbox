@@ -44,6 +44,9 @@ install-local:
 uninstall-local:
 	$(MAKE) BINPATH="$(LOCALBINPATH)" uninstall
 
+install-functions:
+	$(MAKE) -C functions install
+
 
 info:
 	$(info Shell: $(SHELL))
@@ -59,12 +62,14 @@ info:
 
 help:
 	@ echo "Invoked help:"
-	@ echo "  install          -  Install scripts on BIN path."
-	@ echo "  uninstall        -  Remove scripts from BIN path."
+	@ echo "  install            -  Install scripts on BIN path."
+	@ echo "  uninstall          -  Remove scripts from BIN path."
 	@ echo ""
-	@ echo "  install-local    -  Install scripts on local BIN path."
-	@ echo "  uninstall-local  -  Remove scripts from local BIN path."
+	@ echo "  install-local      -  Install scripts on local BIN path."
+	@ echo "  uninstall-local    -  Remove scripts from local BIN path."
 	@ echo ""
-	@ echo "  info         -  Show info about all config."
+	@ echo "  install-functions  -  Install functions"
+	@ echo ""
+	@ echo "  info               -  Show info about all config."
 	@ echo ""
 	@ echo "All targets require sudo to execute."
