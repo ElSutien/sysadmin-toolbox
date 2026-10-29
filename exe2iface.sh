@@ -1,8 +1,8 @@
 #!/bin/bash
 
 NAME="exe2iface"
-VERSION="0.2"
-RELEASE_DATE="14/11/2025"
+VERSION="0.3"
+RELEASE_DATE="29/10/2026"
 AUTHOR="ElSutien"
 
 error () {
@@ -175,7 +175,7 @@ while [ $# -gt 0 ]; do
 		  echo "HELP: $NAME [options] <Iface> [command [attrs ...]]"
 		  echo ""
 		  echo "      Options:"
-		  #echo "        -w --wlan     Interface is a Phy-Wlan iface"
+		  echo "        -w --wlan     Interface is a Phy-Wlan iface"
 		  echo "        -h --help     Show this help"
 		  echo "        -V --version  Show version information"
 		  echo ""
@@ -217,21 +217,6 @@ done
 
 
 
-#Get parameters
-# $2: iface to bind
-# $3: command (opt) default alacritty
-# $4: command attributes
-
-[ -n "$1" ] && CMD="$1" || CMD="bash"
-shift
-#[ -n "$1" ] && ATR="$*" || ATR="$IP"
-
-ATR=()
-for x in $*; do
-  ATR+=("$x")
-done
-
-
 #Checking interface
 checkDev $IFACE || error "Iface '$IFACE' do not exist" exit 2
 checkDevIsDhcp $IFACE && isDhcp=1 || isDhcp=0
@@ -249,12 +234,21 @@ fi
 NETNS="ns_${IFACE}_${$}"
 
 
+
 info "Creating namespace..."
 [ $(ip netns | grep "$NETNS" | wc -l) -eq 1 ] && error "Creating net namespace. Already exist" exit 3
 ip netns add ${NETNS} || error "Creating net namespace. Kernel error" exit 3
 
-info "Linking net device..."
-ip link set ${IFACE} netns ${NETNS} || error "Linking net iface. Can not link to NS" exit 4
+if [ $p_iswlan -eq 0 ]; then
+  info "Linking net device..."
+  ip link set ${IFACE} netns ${NETNS} || error "Linking net iface. Can not link to NS" exit 4
+else
+  PHY=$(iw dev | grep -E "${IFACE}|^phy" | grep -B1 "${IFACE}" | head -n1 | sed 's/#//')
+  #NETNSPID=$(ip netns exec ${NETNS} bash -c 'sleep 1 >&- & echo "$!"')
+  info "Moving physical device $PHY to namespace..."
+  iw phy ${PHY} set netns name ${NETNS} || error "Linking phy device. Can not link PHY to NS" exit 4
+fi
+
 ip -n ${NETNS} link set ${IFACE} up || error "Linking net iface. Can not bring iface up" exit 4
 
 # If found static config, ask to configure
@@ -270,17 +264,24 @@ if [ $isDhcp -eq 0 ] && [ -n "$ifroute" ] && [ -n "$ifip" ]; then
   fi
 fi
 
-if askYesNo "Do you want to enable DHCP?" "" y; then
-  info "Getting DHCP..."
-  ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
+if [ $p_iswlan -eq 0 ]; then
+  if askYesNo "Do you want to enable DHCP?" "" y; then
+    info "Getting DHCP..."
+    ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
+  fi
 fi
 
 info "Executing command: ${p_cmd[@]}"
 eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
 
 #Restoring interface
-info "Disabling namespace..."
-ip -n ${NETNS} link set netns 1 dev ${IFACE} && ip link set ${IFACE} up || error "Recovering iface to root namespace"
+if [ $p_iswlan -eq 0 ]; then
+  info "Disabling namespace..."
+  ip -n ${NETNS} link set netns 1 dev ${IFACE} && ip link set ${IFACE} up || error "Recovering iface to root namespace"
+else
+  info "Restoring phy device..."
+  ip netns exec ${NETNS} iw phy ${PHY} set netns 1 || error "Recovering phy dev to root namespace"
+  ip link set ${IFACE} up || error "Recovering iface"
+fi
+
 ip netns delete ${NETNS} || error "Deleting namespace"
-
-
