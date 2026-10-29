@@ -269,10 +269,23 @@ if [ $p_iswlan -eq 0 ]; then
     info "Getting DHCP..."
     ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
   fi
+else
+  if [ -x /usr/libexec/iwd ]; then
+    echo "IWd detected on system"
+    if askYesNo "Do you want to enable IWd daemon?" "" y; then
+      info "Starting iwd on background..."
+      ip netns exec ${NETNS} /usr/libexec/iwd 1>/dev/null 2>&1 &
+      daemonpid=$!
+    fi
+  fi
 fi
 
 info "Executing command: ${p_cmd[@]}"
 eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
+
+if [ -n "$daemonpid" ]; then #If exist a background daemon
+  kill $daemonpid
+fi
 
 #Restoring interface
 if [ $p_iswlan -eq 0 ]; then
