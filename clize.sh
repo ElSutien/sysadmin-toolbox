@@ -1,10 +1,39 @@
 #!/bin/bash
 
 
-VERSION="1.1"
-RELEASE_DATE="22/09/2026"
+VERSION="1.2"
+RELEASE_DATE="30/10/2026"
 AUTHOR="ElSutien"
 
+
+# Check needed dependencies for execution
+checkDependencies () {
+  local dependecies="grep script"
+  local res=0 x
+  for x in $dependencies; do
+    which $x 1>/dev/null 2>&1 || error "Dependencies not met for '$x'" exit 5
+  done
+}
+
+# Print an error message to stderr
+# $1 : String to print
+# stderr: Printed message
+perror () {
+  [ -t 2 ] && local CNC="\033[0m" CRED="\033[1;31m" || local CNC= CRED=
+  echo -e "${CRED}ERROR: $*${CNC}" 1>&2
+}
+
+# Print an error message and perform an action
+# $1 : String to print
+# $* : Command to execute after print
+error () {
+  perror "${1}"
+  shift
+  if [ $# -gt 0 ]; then
+    eval $@
+    return $?
+  fi
+}
 
 __clizepipe_one () {
   local red='1;31'
@@ -38,8 +67,8 @@ printHelp () {
   echo "Colorize the output of a command using regex."
   echo
   echo "Options:"
-  echo "  --help      Show this help message"
-  echo "  --version   Show version information"
+  echo "  -h --help      Show this help message"
+  echo "  -V --version   Show version information"
   echo
   echo "COLOR is a predefined color. Available are:"
   echo "  red    -- EXAMPLE" | __clizepipe_one red EXAMPLE
@@ -53,11 +82,11 @@ printHelp () {
 }
 
 printVersion () {
-  echo "Clize v$VERSION ($RELEASE_DATE)"
-  echo "By $AUTHOR"
+  echo "Clize v$VERSION ($RELEASE_DATE) - By $AUTHOR"
 }
 
 
+checkDependencies
 
 declare -a rules=()
 declare -a cmd=()
@@ -65,12 +94,12 @@ declare found_separator=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --help)
+    -h|--help)
       printHelp
       exit 0
       ;;
       
-    --version)
+    -V|--version)
       printVersion
       exit 0
       ;;
@@ -81,11 +110,14 @@ while [ "$#" -gt 0 ]; do
       cmd=("$@")
       break
       ;;
+      
+    -*)
+      error "Parameter '$1' do not exist" exit 1
+      ;;
 
     *)
       if [ "$#" -lt 3 ]; then
-        printf 'Usage: clize COLOR REGEX [COLOR REGEX ...] -- COMMAND [ARGS...]\n' >&2
-        exit 1
+        error "Wrong syntax. Execute with '--help' to show usage info." exit 1
       fi
 
       rules+=("$1" "$2")
@@ -95,15 +127,12 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$found_separator" -ne 1 ]; then
-  printf 'clize: falta separador --\n' >&2
-  printf 'Uso: clize COLOR REGEX [COLOR REGEX ...] -- COMANDO [ARGS...]\n' >&2
-  exit 1
+  error "clize: missing separator '--'" exit 1
 fi
 
 if [ "${#cmd[@]}" -eq 0 ]; then
-  printf 'clize: falta comando despues de --\n' >&2
-  exit 1
+  error "clize: missing command after --" exit 1
 fi
 
 script -qefc "$(printf '%q ' "${cmd[@]}")" /dev/null | __clizepipe "${rules[@]}"
-
+exit $?
