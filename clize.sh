@@ -15,17 +15,22 @@ checkDependencies () {
   done
 }
 
-# Print an error message to stderr
-# $1 : String to print
-# stderr: Printed message
+# FUNCTION Print an error message to stderr with color
+# Parameters:
+#   - 1*: str Message to print
+# Stderr: Printed message with colors
+# Date: 30/10/20226
 perror () {
   [ -t 2 ] && local CNC="\033[0m" CRED="\033[1;31m" || local CNC= CRED=
-  echo -e "${CRED}ERROR: $*${CNC}" 1>&2
+  echo -e "${CRED}ERROR: ${@}${CNC}" 1>&2
 }
 
-# Print an error message and perform an action
-# $1 : String to print
-# $* : Command to execute after print
+# FUNCTION Print an error message and perform an action
+# Parameters:
+#   - 1 : str Message to print
+#   - 2*: str Command and attributes to execute after print
+# Stderr: Printed message with colors
+# Date: 30/10/20226
 error () {
   perror "${1}"
   shift
