@@ -29,10 +29,7 @@ perror () {
 error () {
   perror "${1}"
   shift
-  if [ $# -gt 0 ]; then
-    eval $@
-    return $?
-  fi
+  [ $# -gt 0 ] && { eval $@; return $?; }
 }
 
 __clizepipe_one () {
