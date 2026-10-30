@@ -1,30 +1,52 @@
 #!/bin/bash
 
 NAME="exe2iface"
-VERSION="0.3"
-RELEASE_DATE="29/10/2026"
+VERSION="0.4"
+RELEASE_DATE="30/10/2026"
 AUTHOR="ElSutien"
 
-error () {
-  echo -e "\033[1;31mERROR: ${1}\033[0m" 1>&2
-  shift
-  if [ $# -gt 0 ]; then
-    eval $*
-    return $?
-  fi
+
+# FUNCTION Print an error message to stderr with color
+# Parameters:
+#   - 1*: str Message to print
+# Stderr: Printed message with colors
+# Date: 30/10/20226
+perror () {
+  [ -t 2 ] && local CNC="\033[0m" CRED="\033[1;31m" || local CNC= CRED=
+  echo -e "${CRED}ERROR: ${@}${CNC}" 1>&2
 }
 
-info () {
-  echo -e "\033[1;36mINFO: ${1}\033[0m"
+# FUNCTION Print an info message to stdout with color
+# Parameters:
+#   - 1*: str Message to print
+# Stdout: Printed message with colors
+# Date: 30/10/20226
+pinfo () {
+  [ -t 1 ] && local CNC="\033[0m" CBLU="\033[1;36m" || local CNC= CRED=
+  echo -e "${CBLU}INFO: ${@}${CNC}"
 }
+
+# FUNCTION Print an error message and perform an action
+# Parameters:
+#   - 1 : str Message to print
+#   - 2*: str Command and attributes to execute after print
+# Stderr: Printed message with colors
+# Date: 30/10/20226
+error () {
+  perror "${1}"
+  shift
+  [ $# -gt 0 ] && { eval $@; return $?; }
+}
+
+
 
 
 
 # FUNCTION for ask an option of Yes or No
 # Parameters:
-#       - 1: str of the question to ask the user
-#       - 2: name of the variable to store the result [optional]
-#       - 3: char of the default value ('y' or 'n') [optional]
+#   - 1 : str of the question to ask the user
+#   - 2 : varname of the variable to store the result [optional]
+#   - 3 : char of the default value ('y' or 'n') [optional]
 # Returns: 0 for yes, 1 for no 
 #          byRef: 'y' for yes; 'n' for no
 # Date: 04/11/2026
@@ -89,6 +111,15 @@ checkDevIsDhcp () {
   return 0
 }
 
+# FUNCTION Check if a NetNS exist on system
+# Parameters:
+#   - 1 : str Name of the netns
+# Returns: 0 for yes; 1 for no
+checkNetns () {
+  ip netns | grep -xq "${1}" || return 1
+  return 0
+}
+
 # FUNCTION Get default route for Dev
 # $1 : Dev name
 getDefRouteDev () {
@@ -106,34 +137,18 @@ getIpDev () {
   return $?
 }
 
-# FUNCTION Get the default route via for an iface
-# $1 : Dev name
-# $2 : var name to store Default Via IP
-getDefaultViaDev () {
-  local via=$(ip r show dev ${1} 2>&1 | grep default | awk '{print $3}')
-  eval $2="\"$via\""
-}
-
-
-# $1 : destination IP
-# $2 : Via IP
-# $3 : Dev name
-checkRule () {
-  ip route show dev ${3} 2>&1 | grep -q "${1} via ${2} dev ${3}" && return 0 || return 1
-}
-
-
-# $1 : host
-# echoes IP
-resolveHost () {
-  local addr
-  if echo "$1" | grep -q "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"; then
-    echo "$1"
-  else
-    addr=$(host -t A ${1} | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+") || return 1
-    echo $addr
+# FUNCTION Cleanup all network changes done by the program
+cleanup () {
+  pinfo "Cleaning up system network..."
+  #Check if the netns is up
+  if [ -n "${NETNS}" ]; then
+    if checkNetns "${NETNS}"; then
+      ip netns delete ${NETNS} || perror "Namespace could not be deleted"
+    fi
   fi
 }
+
+
 
 
 
@@ -226,26 +241,29 @@ if [ $isDhcp -eq 0 ]; then
   ifroute=$(getDefRouteDev $IFACE)
   ifip=$(getIpDev $IFACE)
 else
-  info "Interface will be configured using DHCP"
+  pinfo "Interface will be configured using DHCP"
 fi
 
+
+#Create a trap to cleanup
+trap 'cleanup' EXIT SIGTERM SIGINT SIGKILL
 
 #Set variables
 NETNS="ns_${IFACE}_${$}"
 
 
 
-info "Creating namespace..."
+pinfo "Creating namespace..."
 [ $(ip netns | grep "$NETNS" | wc -l) -eq 1 ] && error "Creating net namespace. Already exist" exit 3
 ip netns add ${NETNS} || error "Creating net namespace. Kernel error" exit 3
 
 if [ $p_iswlan -eq 0 ]; then
-  info "Linking net device..."
+  pinfo "Linking net device..."
   ip link set ${IFACE} netns ${NETNS} || error "Linking net iface. Can not link to NS" exit 4
 else
   PHY=$(iw dev | grep -E "${IFACE}|^phy" | grep -B1 "${IFACE}" | head -n1 | sed 's/#//')
   #NETNSPID=$(ip netns exec ${NETNS} bash -c 'sleep 1 >&- & echo "$!"')
-  info "Moving physical device $PHY to namespace..."
+  pinfo "Moving physical device $PHY to namespace..."
   iw phy ${PHY} set netns name ${NETNS} || error "Linking phy device. Can not link PHY to NS" exit 4
 fi
 
@@ -266,33 +284,37 @@ fi
 
 if [ $p_iswlan -eq 0 ]; then
   if askYesNo "Do you want to enable DHCP?" "" y; then
-    info "Getting DHCP..."
+    pinfo "Getting DHCP..."
     ip netns exec ${NETNS} dhcpcd ${IFACE} 1>/dev/null 2>&1 || error "Getting DHCP" exit 5
   fi
 else
   if [ -x /usr/libexec/iwd ]; then
     echo "IWd detected on system"
     if askYesNo "Do you want to enable IWd daemon?" "" y; then
-      info "Starting iwd on background..."
+      pinfo "Starting iwd on background..."
       ip netns exec ${NETNS} /usr/libexec/iwd 1>/dev/null 2>&1 &
       daemonpid=$!
     fi
   fi
 fi
 
-info "Executing command: ${p_cmd[@]}"
+pinfo "Executing command: ${p_cmd[@]}"
 eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
 
 if [ -n "$daemonpid" ]; then #If exist a background daemon
   kill $daemonpid
 fi
 
+
+#Disable cleanup trap
+trap - EXIT SIGTERM SIGINT SIGKILL
+
 #Restoring interface
 if [ $p_iswlan -eq 0 ]; then
-  info "Disabling namespace..."
+  pinfo "Disabling namespace..."
   ip -n ${NETNS} link set netns 1 dev ${IFACE} && ip link set ${IFACE} up || error "Recovering iface to root namespace"
 else
-  info "Restoring phy device..."
+  pinfo "Restoring phy device..."
   ip netns exec ${NETNS} iw phy ${PHY} set netns 1 || error "Recovering phy dev to root namespace"
   ip link set ${IFACE} up || error "Recovering iface"
 fi
@@ -304,7 +326,7 @@ if [ $p_iswlan -eq 1 ]; then #Check recovery for wlan ifaces
   sleep 1
   if ! checkDev ${IFACE}; then
     error "Iface ${IFACE} not well recovered"
-    info "Recreating iface..."
-    iw phy ${PHY} interface add ${IFACE} type managed && info "Iface ${IFACE} recovered!" || error "Iface ${IFACE} could not be created from ${PHY}"
+    pinfo "Recreating iface..."
+    iw phy ${PHY} interface add ${IFACE} type managed && pinfo "Iface ${IFACE} recovered!" || error "Iface ${IFACE} could not be created from ${PHY}"
   fi
 fi
