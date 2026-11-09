@@ -8,7 +8,7 @@ AUTHOR="ElSutien"
 
 # FUNCTION Print an error message to stderr with color
 # Parameters:
-#   - 1*: str Message to print
+#   - 1+: str Message to print
 # Stderr: Printed message with colors
 # Date: 30/10/20226
 perror () {
@@ -24,6 +24,16 @@ perror () {
 pinfo () {
   [ -t 1 ] && local CNC="\033[0m" CBLU="\033[1;36m" || local CNC= CRED=
   echo -e "${CBLU}INFO: ${@}${CNC}"
+}
+
+# FUNCTION Print a warning message to stdout with color
+# Parameters:
+#   - 1*: str Message to print
+# Stdout: Printed message with colors
+# Date: 30/10/20226
+pwarn () {
+  [ -t 1 ] && local CNC="\033[0m" CYEL="\033[1;33m" || local CNC= CRED=
+  echo -e "${CYEL}WARNING: ${@}${CNC}"
 }
 
 # FUNCTION Print an error message and perform an action
@@ -118,6 +128,12 @@ checkDevIsDhcp () {
 checkNetns () {
   ip netns | grep -xq "${1}" || return 1
   return 0
+}
+
+# FUNCTION Check if OS is using NetworkManager
+# Returns: 0 for yes; 1 for no
+checkIfUsingNM () {
+  systemctl is-active NetworkManager | grep -qx active && return 0 || return 1
 }
 
 # FUNCTION Get default route for Dev
@@ -293,7 +309,8 @@ else
     if askYesNo "Do you want to enable IWd daemon?" "" y; then
       pinfo "Starting iwd on background..."
       ip netns exec ${NETNS} /usr/libexec/iwd 1>/dev/null 2>&1 &
-      daemonpid=$!
+      sleep 0.2
+      daemonpid=$(pgrep -f "/usr/libexec/iwd")
     fi
   fi
 fi
@@ -302,7 +319,10 @@ pinfo "Executing command: ${p_cmd[@]}"
 eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
 
 if [ -n "$daemonpid" ]; then #If exist a background daemon
-  kill $daemonpid
+  sleep 0.2
+  pinfo "Stopping IWd process..."
+  kill $daemonpid || error "IWd could not be stopped"
+  sleep 1
 fi
 
 
@@ -315,7 +335,9 @@ if [ $p_iswlan -eq 0 ]; then
   ip -n ${NETNS} link set netns 1 dev ${IFACE} && ip link set ${IFACE} up || error "Recovering iface to root namespace"
 else
   pinfo "Restoring phy device..."
-  ip netns exec ${NETNS} iw phy ${PHY} set netns 1 || error "Recovering phy dev to root namespace"
+  nspid=$(pgrep -f /usr/sbin/NetworkManager)
+  ip netns exec ${NETNS} iw phy ${PHY} set netns $nspid || error "Recovering phy dev to root namespace"
+  sleep 1
   ip link set ${IFACE} up || error "Recovering iface"
 fi
 
@@ -325,8 +347,13 @@ ip netns delete ${NETNS} || error "Deleting namespace"
 if [ $p_iswlan -eq 1 ]; then #Check recovery for wlan ifaces
   sleep 1
   if ! checkDev ${IFACE}; then
-    error "Iface ${IFACE} not well recovered"
+    pwarn "Iface ${IFACE} not well recovered"
     pinfo "Recreating iface..."
     iw phy ${PHY} interface add ${IFACE} type managed && pinfo "Iface ${IFACE} recovered!" || error "Iface ${IFACE} could not be created from ${PHY}"
+  fi
+  
+  if checkIfUsingNM; then
+    pinfo "Reloading NetworkManager with ${IFACE}..."
+    systemctl restart NetworkManager || error "NetworkManager failded to reload."
   fi
 fi
