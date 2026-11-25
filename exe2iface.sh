@@ -22,7 +22,7 @@ perror () {
 # Stdout: Printed message with colors
 # Date: 30/10/20226
 pinfo () {
-  [ -t 1 ] && local CNC="\033[0m" CBLU="\033[1;36m" || local CNC= CRED=
+  [ -t 1 ] && local CNC="\033[0m" CBLU="\033[1;36m" || local CNC= CBLU=
   echo -e "${CBLU}INFO: ${@}${CNC}"
 }
 
@@ -32,7 +32,7 @@ pinfo () {
 # Stdout: Printed message with colors
 # Date: 30/10/20226
 pwarn () {
-  [ -t 1 ] && local CNC="\033[0m" CYEL="\033[1;33m" || local CNC= CRED=
+  [ -t 1 ] && local CNC="\033[0m" CYEL="\033[1;33m" || local CNC= CYEL=
   echo -e "${CYEL}WARNING: ${@}${CNC}"
 }
 
@@ -162,6 +162,7 @@ cleanup () {
       ip netns delete ${NETNS} || perror "Namespace could not be deleted"
     fi
   fi
+  exit 0
 }
 
 
@@ -306,23 +307,22 @@ if [ $p_iswlan -eq 0 ]; then
 else
   if [ -x /usr/libexec/iwd ]; then
     echo "IWd detected on system"
-    if askYesNo "Do you want to enable IWd daemon?" "" y; then
-      pinfo "Starting iwd on background..."
-      ip netns exec ${NETNS} /usr/libexec/iwd 1>/dev/null 2>&1 &
-      sleep 0.2
-      daemonpid=$(pgrep -f "/usr/libexec/iwd")
-    fi
+    echo "Use this command to run:"
+    echo "/usr/libexec/iwd -i wlan0 1>/dev/null 2>&1 &"
   fi
 fi
 
 pinfo "Executing command: ${p_cmd[@]}"
 eval ip netns exec ${NETNS} ${p_cmd[@]} || error "Executing command"
 
-if [ -n "$daemonpid" ]; then #If exist a background daemon
-  sleep 0.2
-  pinfo "Stopping IWd process..."
-  kill $daemonpid || error "IWd could not be stopped"
-  sleep 1
+if [ $p_iswlan -eq 1 ]; then
+  daemonpid=$(pgrep -f "/usr/libexec/iwd")
+  if [ -n "$daemonpid" ]; then #If exist a background daemon
+    sleep 0.2
+    pinfo "Stopping IWd process..."
+    kill $daemonpid || error "IWd could not be stopped"
+    sleep 1
+  fi
 fi
 
 
